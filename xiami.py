@@ -679,11 +679,11 @@ class xiami(object):
     def download_collect(self):
         html = ss.get(url_collect % self.collect_id).text
         html = html.split('<div id="wall"')[0]
-        collect_name = re.search(r'<h2>(.+?)<', html).group(1)
+        collect_name = re.search(r'<title>(.+?)<', html).group(1)
         d = collect_name
         dir_ = os.path.join(os.getcwdu(), d)
         self.dir_ = modificate_file_name_for_wget(dir_)
-        song_ids = re.findall('/song/(\w+)" title', html)
+        song_ids = re.findall(r'/song/(\w+)"\s+title', html)
         amount_songs = unicode(len(song_ids))
         song_ids = song_ids[args.from_ - 1:]
         print(s % (2, 97, u'\n  >> ' + amount_songs + u' 首歌曲将要下载.')) \
@@ -910,12 +910,13 @@ class xiami(object):
             self.song_id = j[0]['id']
             self.download_song()
 
-    def display_infos(self, i, nn, n):
+    def display_infos(self, i, nn, n, durl):
         print n, '/', nn
         print s % (2, 94, i['file_name'])
         print s % (2, 95, i['album_name'])
         print 'http://www.xiami.com/song/%s' % i['song_id']
         print 'http://www.xiami.com/album/%s' % i['album_id']
+        print durl
         if i['durl_is_H'] == 'h':
             print s % (1, 97, 'MP3-Quality:'), s % (1, 92, 'High')
         else:
@@ -923,7 +924,7 @@ class xiami(object):
         print '—' * int(os.popen('tput cols').read())
 
     def get_mp3_quality(self, durl):
-        if 'm3.file.xiami.com' in durl or 'm6.file.xiami.com' in durl:
+        if 'm3.file.xiami.com' in durl or 'm6.file.xiami.com' in durl or '_h.mp3' in durl:
             return 'h'
         else:
             return 'l'
@@ -940,7 +941,7 @@ class xiami(object):
 
             mp3_quality = self.get_mp3_quality(durl)
             i['durl_is_H'] = mp3_quality
-            self.display_infos(i, nn, n)
+            self.display_infos(i, nn, n, durl)
             n = int(n) + 1
             cmd = 'mpv --really-quiet ' \
                 '--cache 8146 ' \
