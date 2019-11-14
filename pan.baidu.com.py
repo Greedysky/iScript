@@ -114,9 +114,11 @@ headers = {
     "Accept-Language":"en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2",
     "Referer":"http://pan.baidu.com/disk/home",
     "X-Requested-With": "XMLHttpRequest",
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.75 Safari/537.36",
     "Connection": "keep-alive",
 }
+
+NETDISK_UA = 'netdisk;8.12.9;;android-android;7.0;JSbridge3.0.0'
 
 ss = requests.session()
 ss.headers.update(headers)
@@ -758,7 +760,7 @@ class panbaiducom_HOME(object):
         self.timestamp = timestamp
 
     def _get_dlink(self, path):
-        dlink = ('http://d.pcs.baidu.com/rest/2.0/pcs/file?method=download'
+        dlink = ('http://c.pcs.baidu.com/rest/2.0/pcs/file?method=download'
                  '&app_id=250528&path={}&ver=2.0&clienttype=1').format(
                    urllib.quote(path))
 
@@ -939,25 +941,31 @@ class panbaiducom_HOME(object):
 
         cookie = 'Cookie: ' + '; '.join([
             k + '=' + v for k, v in ss.cookies.get_dict().items()])
-        user_agent  = "netdisk;5.3.1.3;PC;PC-Windows;5.1.2600;WindowsBaiduYunGuanJia"
-        # user_agent  = "netdisk;7.15.1;HUAWEI+G750-T01;android-android;4.2.2"
-        # user_agent = headers['User-Agent']
+
+        # Netdisk user agents:
+        #
+        # "netdisk;6.7.1.9;PC;PC-Windows;10.0.17763;WindowsBaiduYunGuanJia"
+        # "netdisk;5.3.1.3;PC;PC-Windows;5.1.2600;WindowsBaiduYunGuanJia"
+        # "netdisk;7.15.1;HUAWEI+G750-T01;android-android;4.2.2"
+        # "netdisk;4.4.0.6;PC;PC-Windows;6.2.9200;WindowsBaiduYunGuanJia"
+        # "netdisk;5.3.1.3;PC;PC-Windows;5.1.2600;WindowsBaiduYunGuanJia"
+        #
+        # Recently all downloading requests using above user-agents are limited by baidu
+
+        user_agent = headers['User-Agent']
 
         if args.aget_s:
             quiet = ' --quiet=true' if args.quiet else ''
-                #'--user-agent "netdisk;4.4.0.6;PC;PC-Windows;6.2.9200;WindowsBaiduYunGuanJia" ' \
-                #'--user-agent "netdisk;5.3.1.3;PC;PC-Windows;5.1.2600;WindowsBaiduYunGuanJia" ' \
-                #'--header "Referer:http://pan.baidu.com/disk/home " ' \
-            cmd = 'aget -k %s -s %s ' \
+            cmd = 'aget ' \
+                '"%s" ' \
                 '-o "%s.tmp" ' \
                 '-H "User-Agent: %s" ' \
-                '-H "Content-Type: application/x-www-form-urlencoded" ' \
+                '-H "Referer: http://pan.baidu.com/disk/home" ' \
                 '-H "Connection: Keep-Alive" ' \
                 '-H "Accept-Encoding: gzip" ' \
                 '-H "%s" ' \
-                '"%s"' \
-                % (args.aget_k, args.aget_s, infos['file'],
-                   user_agent, cookie, infos['dlink'])
+                '-s %s -k %s' \
+                % (infos['dlink'], infos['file'], user_agent, cookie, args.aget_s, args.aget_k)
         elif args.aria2c:
             quiet = ' --quiet=true' if args.quiet else ''
             taria2c = ' -x %s -s %s' % (args.aria2c, args.aria2c)
@@ -1137,8 +1145,13 @@ class panbaiducom_HOME(object):
             "content-crc32" : content_crc32,
             "ondup" : self.ondup
         }
+
+        # WARNING: here needs netdist user-agent
+        theaders = dict(ss.headers)
+        theaders['User-Agent'] = NETDISK_UA
+
         url = 'https://c.pcs.baidu.com/rest/2.0/pcs/file'
-        r = ss.post(url, params=p, data=data, verify=VERIFY)
+        r = ss.post(url, params=p, data=data, verify=VERIFY, headers=theaders)
         if r.ok:
             return ENoError
         else:
@@ -1198,8 +1211,13 @@ class panbaiducom_HOME(object):
                 {'block_list': self.upload_datas[lpath]['slice_md5s']}
             )
         }
+
+        # WARNING: here needs netdist user-agent
+        theaders = dict(ss.headers)
+        theaders['User-Agent'] = NETDISK_UA
+
         url = 'https://c.pcs.baidu.com/rest/2.0/pcs/file'
-        r = ss.post(url, params=p, data=data, verify=VERIFY)
+        r = ss.post(url, params=p, data=data, verify=VERIFY, headers=theaders)
         if r.ok:
             return ENoError
         else:
@@ -1224,8 +1242,10 @@ class panbaiducom_HOME(object):
         fl = cStringIO.StringIO(__slice_block)
         files = {'file': ('file', fl, '')}
         data = MultipartEncoder(files)
-        theaders = headers
+        theaders = dict(headers)
         theaders['Content-Type'] = data.content_type
+        theaders['User-Agent'] = NETDISK_UA
+
         url = 'https://c.pcs.baidu.com/rest/2.0/pcs/file'
         r = ss.post(url, params=p, data=data, verify=VERIFY, headers=theaders)
         j = r.json()
@@ -1504,8 +1524,8 @@ class panbaiducom_HOME(object):
                 j = {'errno': 'file has exist'}
                 return j
 
-        data = ('filelist=' \
-                + urllib.quote_plus('["%s"]' % info['path'].encode('utf8')) \
+        data = ('fsidlist=' \
+                + urllib.quote_plus('[%s]' % info['fs_id']) \
                 + '&path=' \
                 + urllib.quote_plus(info['remotepath'].encode('utf8'))
             )
@@ -1582,15 +1602,17 @@ class panbaiducom_HOME(object):
         j = info['file_list']['list']
         isdirs = [x['isdir'] for x in j]
         paths = [x['path'] for x in j]
-        z = zip(isdirs, paths)
+        fs_ids = [x['fs_id'] for x in j]
+        z = zip(fs_ids, isdirs, paths)
         if not infos:
             infos = [
                 {
-                    'isdir': x,
-                    'path': y,
+                    'fs_id': a,
+                    'isdir': b,
+                    'path': c,
                     'remotepath': remotepath \
                         if remotepath[-1] != '/' else remotepath[:-1]
-                } for x, y in z
+                } for a, b, c in z
             ]
 
         return infos
@@ -1635,10 +1657,12 @@ class panbaiducom_HOME(object):
 
     @staticmethod
     def _secret_or_not(url):
-        ss.headers['Referer'] = 'http://pan.baidu.com'
+        surl = url.split('?')[0].split('/1')[1].strip('/')
+
+        ss.headers['Referer'] = 'https://pan.baidu.com'
         r = ss.get(url, headers=headers)
+
         if r.status_code != 200 and r.status_code != 302:
-            print('cookies', ss.cookies.get_dict())
             ss.headers['Cookie'] = ';'.join(['{}={}'.format(k, v) for k, v in ss.cookies.get_dict().items()])
             r = ss.get(url, headers=headers, cookies=r.cookies)
 
@@ -1647,12 +1671,17 @@ class panbaiducom_HOME(object):
                 secret = raw_input(s % (2, 92, "  请输入提取密码: "))
             else:
                 secret = args.secret
+
             data = 'pwd=%s&vcode=&vcode_str=' % secret
-            query = 'bdstoken=null&channel=chunlei&clienttype=0&web=1&app_id=250528'
-            url = "%s&t=%d&%s" % (
-                r.url.replace('init', 'verify'),
-                int(time.time()*1000),
-                query
+            url = (
+                'https://pan.baidu.com/share/verify?'
+                + 'surl=' + surl
+                + '&t=' + str(int(time.time()*1000))
+                + '&channel=chunlei'
+                + '&web=1'
+                + '&app_id=250528'
+                + '&bdstoken=null'
+                + '&clienttype=0'
             )
             theaders = {
                 'Accept-Encoding': 'gzip, deflate',
@@ -1661,13 +1690,15 @@ class panbaiducom_HOME(object):
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                 'Accept': '*/*',
                 'X-Requested-With': 'XMLHttpRequest',
-                'Cookie': 'BAIDUID=0F38C66B2C9AC2FC887BD3FEB059F5AC:FG=1; PANWEB=1',
                 'Connection': 'keep-alive',
+                'Sec-Fetch-Mode': 'cors',
+                'Referer': 'https://pan.baidu.com/share/init?surl=' + surl
             }
             r = ss.post(url, data=data, headers=theaders)
             if r.json()['errno']:
-                print s % (2, 91, "  !! 提取密码错误\n")
+                print s % (2, 91, "  !! 提取密码错误, %s\n" % r.text)
                 sys.exit(1)
+            ss.cookies.update(r.cookies.get_dict())
 
     #######################################################################
     # for saveing inbox shares
@@ -2362,7 +2393,7 @@ class panbaiducom_HOME(object):
         }
 
         url = 'http://pan.baidu.com/rest/2.0/services/cloud_dl'
-        r = ss.post(url, params=p)
+        r = ss.get(url, params=p)
         j = r.json()
         if j.get('error_code'):
             print s % (1, 91, '  !! Error at _get_torrent_info:'), j['error_msg']
@@ -2887,7 +2918,6 @@ class panbaiducom_HOME(object):
 class panbaiducom(object):
     @staticmethod
     def get_web_fileinfo(cm, url):
-        info = {}
         if 'shareview' in url:
             info['uk']       = re.search(r'uk="(\d+)"', cm).group(1)
             info['shareid']  = re.search(r'shareid="(\d+)"', cm).group(1)
@@ -2938,22 +2968,43 @@ class panbaiducom(object):
             'fs_id': j[0]['fs_id']
             })
 
+    def get_vcode(self):
+        url = (
+            'https://pan.baidu.com/api/getvcode'
+            '?prod=pan'
+            '&t={}'
+            '&channel=chunlei'
+            '&web=1'
+            '&app_id=250528'
+            '&bdstoken={}'
+        ).format(random.random(), self.bdstoken)
+
+        r = ss.get(url)
+        j = r.json()
+        return j
+
     def get_infos(self):
         url = ('https://pan.baidu.com/api/sharedownload?'
                'sign={}&timestamp={}&bdstoken={}'
                '&channel=chunlei&clienttype=0&web=1').format(
                    self.sign, self.timestamp, self.bdstoken)
 
-        data = ('encrypt=0&product=share'
-                + '&uk=' + self.uk
-                + '&primaryid=' + self.shareid
-                + '&fid_list=' + urllib.quote_plus('["%s"]' % self.infos['fs_id'])
-               )
+        data = {
+            'encrypt': '0',
+            'product': 'share',
+            'uk': self.uk,
+            'primaryid': self.shareid,
+            'fid_list': urllib.quote_plus('[%s]' % self.infos['fs_id']),
+            'path_list': '',
+            'vip': '0',
+        }
 
         while True:
-            r = ss.post(url, data=data)
+            data_str = '&'.join(['{}={}'.format(k, v) for k, v in data.items()])
+            r = ss.post(url, data=data_str)
             j = r.json()
-            if not j['errno']:
+            errno = j['errno']
+            if errno == 0:
                 dlink = fast_pcs_server(j['list'][0]['dlink'].encode('utf8'))
                 self.infos['dlink'] = dlink
                 if args.play:
@@ -2961,10 +3012,14 @@ class panbaiducom(object):
                 else:
                     panbaiducom_HOME._download_do(self.infos)
                 break
+            elif errno == 118:
+                print s % (1, 91, '  !! 没有下载权限！, 请转存网盘后，从网盘地址下载')
+                sys.exit(1)
             else:
+                j = self.get_vcode()
                 vcode = j['vcode']
                 input_code = panbaiducom_HOME.save_img(j['img'], 'jpg')
-                self.params.update({'input': input_code, 'vcode': vcode})
+                data.update({'vcode_input': input_code, 'vcode_str': vcode})
 
     def get_infos2(self, path):
         while True:
@@ -2985,7 +3040,7 @@ class panbaiducom(object):
                     panbaiducom_HOME._download_do(self.infos)
                 break
             else:
-                print s % (1, '  !! Error at get_infos2, can\'t get dlink')
+                print s % (1, 91, '  !! Error at get_infos2, can\'t get dlink')
 
     def do(self, paths):
         for path in paths:
@@ -3313,7 +3368,7 @@ def handle_command(comd, xxx):
             url = xxx[0]
             x.save_inbox_share(url, remotepath, infos=infos)
         else:
-            url = re.search(r'(http://.+?.baidu.com/.+?)(#|$)', xxx[0]).group(1)
+            url = re.search(r'(https?://.+?.baidu.com/.+?)(#|$)', xxx[0]).group(1)
             url = url.replace('wap/link', 'share/link')
             x._secret_or_not(url)
             x.save_share(url, remotepath, infos=infos)

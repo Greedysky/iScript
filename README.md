@@ -135,9 +135,9 @@ xm login username
 xm login username password
 
 # 手动添加cookie登录
-1. 用浏览器登录后，按F12，然后访问 http://xiami.com/vip
-2. 选择‘网络’或network，找到 xiami.com/vip，在其中找到 Cookie: memthod_auth=value
-3. value填入 xm g value，再执行。
+1. 用浏览器登录后，按F12，然后访问 https://www.xiami.com/album/123456
+2. 选择‘网络’或network，找到 123456，在其中找到 Cookie: xxx
+3. 然后在终端运行 xm g "xxx"
 
 # 退出登录
 xm signout
@@ -239,6 +239,8 @@ pan.baidu.com.py 是一个百度网盘的命令行客户端。
 初次使用需要登录 bp login
 
 **支持多帐号登录**
+
+**现在只支持[用cookie登录](#cookie_login)**
 
 **支持cookie登录**
 
@@ -507,6 +509,7 @@ bp login username password
 # 一直用 bp login 即可
 ```
 
+<a name="cookie_login"></a>
 #### cookie 登录:
 
 1.  打开 chrome 隐身模式窗口  
@@ -1298,6 +1301,7 @@ python2-requests (https://github.com/kennethreitz/requests)
 
 --update              下载新发布的东西
 --redownload          重新遍历所有的东西，如果有漏掉的东西则下载
+--proxy protocol://address:port     设置代理
 
 -f OFFSET, --offset OFFSET      从第offset个开始，只对 -V 有用。
 ```
@@ -1310,6 +1314,10 @@ tm是tumblr.py的马甲 (alias tm='python2 /path/to/tumblr.py')
 # 下载图片
 tm http://sosuperawesome.tumblr.com
 tm http://sosuperawesome.tumblr.com -t beautiful
+
+# 下载图片(使用代理)
+tm http://sosuperawesome.tumblr.com -x socks5://127.0.0.1:1024
+tm http://sosuperawesome.tumblr.com -t beautiful -x socks5://127.0.0.1:1024
 
 # 下载单张图片
 tm http://sosuperawesome.tumblr.com/post/121467716523/murosvur-on-etsy
